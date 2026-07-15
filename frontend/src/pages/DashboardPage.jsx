@@ -283,7 +283,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Quick actions for admin */}
+      {/* admin quick action*/}
       {isAdmin() && (
         <div style={{ marginTop: '20px' }}>
           <div className="card-title" style={{ marginBottom: '12px' }}>Quick Actions</div>
