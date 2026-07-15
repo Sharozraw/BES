@@ -3,19 +3,19 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@headlessui/react": "^1.7.17",
-    "axios": "^1.6.5",
-    "clsx": "^2.1.0",
-    "date-fns": "^3.2.0",
-    "lucide-react": "^0.309.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-hook-form": "^7.49.3",
-    "react-hot-toast": "^2.4.1",
-    "react-query": "^3.39.3",
     "react-router-dom": "^6.21.0",
+    "axios": "^1.6.5",
+    "zustand": "^4.4.7",
+    "react-query": "^3.39.3",
+    "react-hook-form": "^7.49.3",
+    "date-fns": "^3.2.0",
+    "react-hot-toast": "^2.4.1",
+    "lucide-react": "^0.309.0",
     "recharts": "^2.10.3",
-    "zustand": "^4.4.7"
+    "@headlessui/react": "^1.7.17",
+    "clsx": "^2.1.0"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -23,17 +23,10 @@
     "test": "react-scripts test"
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version"]
   },
   "devDependencies": {
-    "react-scripts": "^0.0.0"
+    "react-scripts": "5.0.1"
   }
 }
