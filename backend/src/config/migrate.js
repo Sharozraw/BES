@@ -312,6 +312,14 @@ const migrate = async () => {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_evaluations_stage ON evaluations(stage_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_evaluations_bidder ON evaluations(bidder_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_project ON audit_logs(project_id)`);
+    await client.query(`
+      CREATE OR REPLACE FUNCTION prevent_audit_log_mutation() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'Audit logs are immutable'; END;
+      $$ LANGUAGE plpgsql
+    `);
+    await client.query(`DROP TRIGGER IF EXISTS audit_logs_immutable ON audit_logs`);
+    await client.query(`CREATE TRIGGER audit_logs_immutable BEFORE UPDATE OR DELETE ON audit_logs
+      FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation()`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)`);
 
     await client.query('COMMIT');
