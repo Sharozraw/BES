@@ -150,6 +150,7 @@ const autoPopulateFromPDF = async (projectId, parsedData) => {
 exports.getByProject = async (req, res) => {
   try {
     const { projectId } = req.params;
+    const importsOnly = req.query.importsOnly === 'true';
     const result = await query(
       `SELECT d.*, u.first_name || ' ' || u.last_name as uploaded_by_name,
         b.name as bidder_name
@@ -157,6 +158,7 @@ exports.getByProject = async (req, res) => {
        LEFT JOIN users u ON d.uploaded_by = u.id
        LEFT JOIN bidders b ON d.bidder_id = b.id
        WHERE d.project_id = $1
+         ${importsOnly ? "AND d.document_type IN ('tender_import','work_package_import','item_import')" : ''}
        ORDER BY d.created_at DESC`,
       [projectId]
     );

@@ -1,4 +1,4 @@
-const { query } = require('../config/database');
+const { query, getClient } = require('../config/database');
 const logger = require('../utils/logger');
 
 exports.getByProject = async (req, res) => {
@@ -66,13 +66,24 @@ exports.update = async (req, res) => {
 };
 
 exports.delete = async (req, res) => {
+  const client = await getClient();
   try {
     const { id } = req.params;
-    await query(`DELETE FROM bidders WHERE id = $1`, [id]);
+    await client.query('BEGIN');
+    const linked = await client.query(`SELECT id FROM item_bidders WHERE bidder_id=$1`, [id]);
+    const linkIds = linked.rows.map(row => row.id);
+    if (linkIds.length) {
+      await client.query(`DELETE FROM table41_rows WHERE item_bidder_id=ANY($1::uuid[])`, [linkIds]);
+    }
+    const result = await client.query(`DELETE FROM bidders WHERE id = $1 RETURNING id`, [id]);
+    if (!result.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Bidder not found' }); }
+    await client.query('COMMIT');
     res.json({ success: true, message: 'Bidder removed' });
   } catch (err) {
+    await client.query('ROLLBACK');
+    logger.error('Delete bidder error', { err: err.message });
     res.status(500).json({ success: false, message: 'Server error' });
-  }
+  } finally { client.release(); }
 };
 
 exports.getEvaluationSummary = async (req, res) => {
