@@ -1,4 +1,5 @@
-const { query } = require('../config/database');
+const { query, getClient } = require('../config/database');
+const fs = require('fs');
 const logger = require('../utils/logger');
 
 exports.getAll = async (req, res) => {
@@ -28,10 +29,13 @@ exports.getAll = async (req, res) => {
           w.current_stage_index, w.id as workflow_id,
           (SELECT name FROM stages WHERE workflow_id = w.id AND stage_order = w.current_stage_index LIMIT 1) as current_stage_name
         FROM projects p
-        JOIN project_evaluators pe ON pe.project_id = p.id AND pe.user_id = $1
+        LEFT JOIN project_evaluators pe ON pe.project_id = p.id AND pe.user_id = $1
         LEFT JOIN users u ON p.created_by = u.id
         LEFT JOIN workflows w ON w.project_id = p.id
-        ORDER BY p.created_at DESC
+          WHERE pe.user_id IS NOT NULL
+            OR EXISTS (SELECT 1 FROM work_packages wp WHERE wp.project_id=p.id AND wp.evaluator_id=$1)
+            OR EXISTS (SELECT 1 FROM items i WHERE i.project_id=p.id AND i.evaluator_id=$1)
+          ORDER BY p.created_at DESC
       `;
       params = [userId];
     }
@@ -47,6 +51,18 @@ exports.getAll = async (req, res) => {
 exports.getById = async (req, res) => {
   try {
     const { id } = req.params;
+    if (req.user.role_name !== 'admin') {
+      const access = await query(
+        `SELECT 1 FROM projects p
+         WHERE p.id=$1 AND (
+           EXISTS (SELECT 1 FROM project_evaluators pe WHERE pe.project_id=p.id AND pe.user_id=$2)
+           OR EXISTS (SELECT 1 FROM work_packages wp WHERE wp.project_id=p.id AND wp.evaluator_id=$2)
+           OR EXISTS (SELECT 1 FROM items i WHERE i.project_id=p.id AND i.evaluator_id=$2)
+         )`,
+        [id, req.user.id]
+      );
+      if (!access.rows.length) return res.status(403).json({ success: false, message: 'You are not assigned to this tender' });
+    }
 
     const result = await query(
       `SELECT p.*, u.first_name || ' ' || u.last_name as created_by_name,
@@ -154,6 +170,30 @@ exports.update = async (req, res) => {
     logger.error('Update project error', { err: err.message });
     res.status(500).json({ success: false, message: 'Server error' });
   }
+};
+
+exports.delete = async (req, res) => {
+  const client = await getClient();
+  try {
+    const { id } = req.params;
+    await client.query('BEGIN');
+    const docs = await client.query(`SELECT file_path FROM documents WHERE project_id=$1`, [id]);
+    await client.query(`DELETE FROM audit_logs WHERE project_id=$1`, [id]);
+    await client.query(`DELETE FROM reports WHERE project_id=$1`, [id]);
+    await client.query(`DELETE FROM notifications WHERE project_id=$1`, [id]);
+    const project = await client.query(`DELETE FROM projects WHERE id=$1 RETURNING id`, [id]);
+    if (!project.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    await client.query('COMMIT');
+    docs.rows.forEach(doc => { if (doc.file_path) fs.rmSync(doc.file_path, { force: true }); });
+    res.json({ success: true, message: 'Project and all dependent data deleted' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    logger.error('Delete project error', { err: err.message });
+    res.status(500).json({ success: false, message: `Failed to delete project: ${err.message}` });
+  } finally { client.release(); }
 };
 
 exports.assignEvaluators = async (req, res) => {
