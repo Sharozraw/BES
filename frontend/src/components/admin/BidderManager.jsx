@@ -4,9 +4,7 @@ import toast from 'react-hot-toast';
 import { Plus, Edit, Trash2, X, Check } from 'lucide-react';
 
 const emptyBidder = {
-  name: '', address: '', contact_person: '', email: '',
-  phone: '', bid_price: '', currency: 'LKR', bid_price_with_vat: '',
-  registration_no: ''
+  name: '', address: '', contact_person: '', email: '', phone: '',
 };
 
 export default function BidderManager({ projectId, isAdmin }) {
@@ -31,11 +29,11 @@ export default function BidderManager({ projectId, isAdmin }) {
   const openEdit = (b) => {
     setEditing(b.id);
     setForm({
-      name: b.name || '', address: b.address || '',
-      contact_person: b.contact_person || '', email: b.email || '',
-      phone: b.phone || '', bid_price: b.bid_price || '',
-      currency: b.currency || 'LKR', bid_price_with_vat: b.bid_price_with_vat || '',
-      registration_no: b.registration_no || ''
+      name: b.name || '',
+      address: b.address || '',
+      contact_person: b.contact_person || '',
+      email: b.email || '',
+      phone: b.phone || '',
     });
     setShowModal(true);
   };
@@ -46,16 +44,11 @@ export default function BidderManager({ projectId, isAdmin }) {
     if (!form.name) { toast.error('Bidder name is required'); return; }
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        bid_price: form.bid_price ? parseFloat(form.bid_price) : null,
-        bid_price_with_vat: form.bid_price_with_vat ? parseFloat(form.bid_price_with_vat) : null,
-      };
       if (editing) {
-        await biddersAPI.update(editing, payload);
+        await biddersAPI.update(editing, form);
         toast.success('Bidder updated');
       } else {
-        await biddersAPI.create(projectId, payload);
+        await biddersAPI.create(projectId, form);
         toast.success('Bidder added');
       }
       setShowModal(false);
@@ -108,15 +101,8 @@ export default function BidderManager({ projectId, isAdmin }) {
         }}>
           {[
             ['Total Bids', bidders.length],
-            ['Lowest Bid', bidders.filter(b => b.bid_price).length > 0
-              ? `Rs. ${Math.min(...bidders.map(b => Number(b.bid_price)).filter(Boolean)).toLocaleString()}`
-              : '—'
-            ],
-            ['Highest Bid', bidders.filter(b => b.bid_price).length > 0
-              ? `Rs. ${Math.max(...bidders.map(b => Number(b.bid_price)).filter(Boolean)).toLocaleString()}`
-              : '—'
-            ],
             ['Active', bidders.filter(b => b.status === 'active').length],
+            ['Eliminated', bidders.filter(b => b.status === 'eliminated').length],
           ].map(([label, value]) => (
             <div key={label}>
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', marginBottom: '4px', letterSpacing: '1px' }}>{label}</div>
@@ -147,9 +133,6 @@ export default function BidderManager({ projectId, isAdmin }) {
                   <th>#</th>
                   <th>Bidder Name</th>
                   <th>Address</th>
-                  <th>Registration No.</th>
-                  <th>Bid Price (No VAT)</th>
-                  <th>Bid Price (With VAT)</th>
                   <th>Status</th>
                   {isAdmin && <th>Actions</th>}
                 </tr>
@@ -159,15 +142,8 @@ export default function BidderManager({ projectId, isAdmin }) {
                   <tr key={b.id} style={{ opacity: b.status === 'eliminated' ? 0.65 : 1 }}>
                     <td style={{ fontWeight: '600', color: 'var(--text-muted)' }}>{idx + 1}</td>
                     <td style={{ fontWeight: '500' }}>{b.name}</td>
-                    <td style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {b.address || '—'}
-                    </td>
-                    <td style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>{b.registration_no || '—'}</td>
-                    <td style={{ fontFamily: 'IBM Plex Mono, monospace', fontWeight: '500', color: 'var(--navy)' }}>
-                      {b.bid_price ? `Rs. ${Number(b.bid_price).toLocaleString()}` : '—'}
-                    </td>
-                    <td style={{ fontFamily: 'IBM Plex Mono, monospace', fontSize: '12px' }}>
-                      {b.bid_price_with_vat ? `Rs. ${Number(b.bid_price_with_vat).toLocaleString()}` : '—'}
                     </td>
                     <td>
                       <span className={`badge badge-${b.status}`}>
@@ -228,24 +204,12 @@ export default function BidderManager({ projectId, isAdmin }) {
                   <input className="form-control" value={form.contact_person} onChange={e => set('contact_person', e.target.value)} placeholder="Contact name" />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Registration No.</label>
-                  <input className="form-control" value={form.registration_no} onChange={e => set('registration_no', e.target.value)} placeholder="Company reg. number" />
-                </div>
-                <div className="form-group">
                   <label className="form-label">Email</label>
                   <input type="email" className="form-control" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@company.com" />
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label">Phone</label>
                   <input className="form-control" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+94..." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Bid Price (Without VAT)</label>
-                  <input type="number" className="form-control" value={form.bid_price} onChange={e => set('bid_price', e.target.value)} placeholder="0.00" min="0" />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Bid Price (With VAT)</label>
-                  <input type="number" className="form-control" value={form.bid_price_with_vat} onChange={e => set('bid_price_with_vat', e.target.value)} placeholder="0.00" min="0" />
                 </div>
               </div>
             </div>
