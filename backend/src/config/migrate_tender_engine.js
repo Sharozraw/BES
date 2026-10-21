@@ -4,15 +4,44 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  host: process.env.DB_HOST, port: process.env.DB_PORT,
-  database: process.env.DB_NAME, user: process.env.DB_USER, password: process.env.DB_PASSWORD,
-});
+const baseConfig = {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+};
+
+// ---------------------------------------------------------------------------
+// Step 0 — Auto-create the target database if it doesn't exist
+// ---------------------------------------------------------------------------
+const ensureDatabase = async () => {
+  const adminPool = new Pool({ ...baseConfig, database: 'postgres' });
+  try {
+    const res = await adminPool.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      [process.env.DB_NAME]
+    );
+    if (res.rowCount === 0) {
+      const safeName = String(process.env.DB_NAME).replace(/"/g, '""');
+      await adminPool.query(`CREATE DATABASE "${safeName}"`);
+      console.log(`✅ Database "${process.env.DB_NAME}" created`);
+    }
+  } finally {
+    await adminPool.end();
+  }
+};
 
 const migrate = async () => {
+  await ensureDatabase();
+
+  const pool = new Pool({ ...baseConfig, database: process.env.DB_NAME });
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
+
+    // Ensure uuid extension exists (in case base migration wasn't run yet)
+    await client.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS work_packages (
@@ -51,6 +80,9 @@ const migrate = async () => {
     await client.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS evaluation_step INTEGER DEFAULT 0`);
     await client.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS evaluator_id UUID REFERENCES users(id) ON DELETE SET NULL`);
     await client.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS source_document_id UUID`);
+    // ⬇️ NEW — pre-bid estimate (Summary Report row 04)
+    await client.query(`ALTER TABLE items ADD COLUMN IF NOT EXISTS pre_bid_estimate NUMERIC`);
+
     await client.query(`ALTER TABLE bidders ADD COLUMN IF NOT EXISTS source_document_id UUID`);
     await client.query(`ALTER TABLE documents ADD COLUMN IF NOT EXISTS target_work_package_id UUID`);
     await client.query(`ALTER TABLE documents ADD COLUMN IF NOT EXISTS target_item_id UUID`);
@@ -67,6 +99,7 @@ const migrate = async () => {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS item_bidders (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -84,6 +117,9 @@ const migrate = async () => {
       )
     `);
     await client.query(`ALTER TABLE item_bidders ADD COLUMN IF NOT EXISTS source_document_id UUID`);
+    // ⬇️ NEW — brand/model + warranty (Contract Award tab)
+    await client.query(`ALTER TABLE item_bidders ADD COLUMN IF NOT EXISTS brand_model TEXT`);
+    await client.query(`ALTER TABLE item_bidders ADD COLUMN IF NOT EXISTS warranty TEXT`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS table41_rows (
@@ -239,6 +275,17 @@ const migrate = async () => {
     `);
     await client.query(`ALTER TABLE contract_award_recommendations ADD COLUMN IF NOT EXISTS address VARCHAR(500)`);
 
+    // ⬇️ NEW — per-item overrides for Summary Report rows 02 and 03
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS item_summary_overrides (
+        item_id UUID PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+        procurement_title TEXT,
+        source_of_financing TEXT,
+        estimated_amount NUMERIC,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     await client.query(`
       UPDATE table7_rows d SET is_auto_populated=true
       WHERE d.bid_rejected=true AND d.bidder_id IS NOT NULL
@@ -292,15 +339,20 @@ const migrate = async () => {
     console.log('   Tables: work_packages, items, item_bidders,');
     console.log('   table41_rows, table51_rows, table51_acceptance,');
     console.log('   technical_spec_rows, table6_rows, table7_rows,');
-    console.log('   table81_rows, table811_rows, contract_award_recommendations');
+    console.log('   table81_rows, table811_rows, contract_award_recommendations,');
+    console.log('   item_summary_overrides');
+    console.log('   New columns: items.pre_bid_estimate, item_bidders.brand_model, item_bidders.warranty');
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('❌ Migration failed:', err.message);
     throw err;
   } finally {
     client.release();
-    pool.end();
+    await pool.end();
   }
 };
 
-migrate();
+migrate().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -17,7 +17,7 @@ const seed = async () => {
 
     // Seed roles
     const roles = [
-      { name: 'admin', description: 'System Administrator', permissions: ['*'] },
+      { name: 'admin Sharoz', description: 'System Administrator', permissions: ['*'] },
       { name: 'evaluator', description: 'Bid Evaluator', permissions: ['read:projects', 'write:evaluations', 'read:bidders'] },
       { name: 'viewer', description: 'Read-only access', permissions: ['read:projects', 'read:bidders'] },
     ];

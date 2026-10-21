@@ -9,7 +9,32 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD,
 });
 
+const baseConfig = {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+};
+
+const ensureDatabase = async () => {
+  const adminPool = new Pool({ ...baseConfig, database: 'postgres' });
+  try {
+    const res = await adminPool.query(
+      'SELECT 1 FROM pg_database WHERE datname = $1',
+      [process.env.DB_NAME]
+    );
+    if (res.rowCount === 0) {
+      const safeName = String(process.env.DB_NAME).replace(/"/g, '""');
+      await adminPool.query(`CREATE DATABASE "${safeName}"`);
+      console.log(`✅ Database "${process.env.DB_NAME}" created`);
+    }
+  } finally {
+    await adminPool.end();
+  }
+};
+
 const migrate = async () => {
+  await ensureDatabase();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -334,4 +359,7 @@ const migrate = async () => {
   }
 };
 
-migrate();
+migrate().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
