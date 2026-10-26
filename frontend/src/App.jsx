@@ -13,6 +13,7 @@ import ProjectFormPage from './pages/ProjectFormPage';
 import UsersPage from './pages/UsersPage';
 import ReportsPage from './pages/ReportsPage';
 import ProfilePage from './pages/ProfilePage';
+import ItemEvaluationDashboard from './components/evaluation/ItemEvaluationDashboard';
 
 const PrivateRoute = ({ children, adminOnly = false }) => {
   const { isAuthenticated, isAdmin } = useAuthStore();
@@ -71,6 +72,7 @@ function App() {
         <Route path="/users" element={<PrivateRoute adminOnly><UsersPage /></PrivateRoute>} />
         <Route path="/reports" element={<PrivateRoute adminOnly><ReportsPage /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+        <Route path="/items/:itemId" element={<PrivateRoute><ItemEvaluationDashboard /></PrivateRoute>} />
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
